@@ -1,0 +1,22 @@
+{
+  "id": "food-pantry-assistant",
+  "title": "Food Pantry Assistant",
+  "category": "food-security",
+  "description": "Help sort, pack, and distribute food at our weekly food pantry. Directly serve community members facing food insecurity.",
+  "required_skills": ["physical-activity", "customer-service", "food-handling"],
+  "preferred_skills": ["bilingual-spanish", "inventory-management"],
+  "schedule": {
+    "days": ["Tuesday", "Thursday", "Saturday"],
+    "time": "9:00 AM - 12:00 PM",
+    "commitment": "weekly"
+  },
+  "required_count": 6,
+  "confirmed_count": 4,
+  "status": "open",
+  "supervisor": "Maria Santos",
+  "supervisor_contact": "msantos@example-volunteer-org.org",
+  "location": "123 Oak Street Community Center",
+  "experience_required": "none",
+  "created_date": "2025-01-01",
+  "notes": "Physical work — lifting boxes up to 30 lbs. Comfortable shoes required."
+}

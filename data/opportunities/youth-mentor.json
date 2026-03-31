@@ -1,0 +1,24 @@
+{
+  "id": "youth-mentor",
+  "title": "Youth Mentor",
+  "category": "education",
+  "description": "Provide one-on-one mentoring and academic support to at-risk youth ages 12-18. Build relationships and help students develop confidence and life skills.",
+  "required_skills": ["communication", "patience", "mentoring"],
+  "preferred_skills": ["tutoring", "counseling", "sports-coaching", "arts-crafts"],
+  "schedule": {
+    "days": ["Monday", "Wednesday", "Friday"],
+    "time": "3:30 PM - 5:30 PM",
+    "commitment": "bi-weekly minimum"
+  },
+  "required_count": 8,
+  "confirmed_count": 5,
+  "status": "open",
+  "supervisor": "James Chen",
+  "supervisor_contact": "jchen@example-volunteer-org.org",
+  "location": "456 Maple Ave Youth Center",
+  "experience_required": "preferred",
+  "experience_notes": "Experience with youth or education preferred but not required",
+  "background_check": "required",
+  "created_date": "2025-01-01",
+  "notes": "Background check required before starting. Training provided."
+}

@@ -1,0 +1,33 @@
+{
+  "generated_date": "2026-03-31",
+  "shifts": [
+    {
+      "shift_id": "shift-2026-04-01-food-pantry-am",
+      "opportunity_id": "food-pantry-assistant",
+      "title": "Food Pantry Morning Shift",
+      "date": "2026-04-01",
+      "start_time": "09:00",
+      "end_time": "12:00",
+      "location": "123 Oak Street Community Center",
+      "supervisor": "Maria Santos",
+      "supervisor_contact": "msantos@example-volunteer-org.org",
+      "required_count": 6,
+      "confirmed_volunteers": [],
+      "status": "understaffed"
+    },
+    {
+      "shift_id": "shift-2026-04-01-youth-mentor-pm",
+      "opportunity_id": "youth-mentor",
+      "title": "Youth Mentoring Session",
+      "date": "2026-04-01",
+      "start_time": "15:30",
+      "end_time": "17:30",
+      "location": "456 Maple Ave Youth Center",
+      "supervisor": "James Chen",
+      "supervisor_contact": "jchen@example-volunteer-org.org",
+      "required_count": 4,
+      "confirmed_volunteers": [],
+      "status": "understaffed"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+mcp_servers:
+  filesystem:
+    command: npx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-filesystem"
+      - "/Users/samishukri/ao-examples/examples/volunteer-coordinator"
+
+  memory:
+    command: npx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-memory"
+
+  github:
+    command: npx
+    args:
+      - "-y"
+      - "gh-cli-mcp"

@@ -1,0 +1,101 @@
+default_workflow_ref: screen-volunteer
+
+workflows:
+  - id: screen-volunteer
+    name: "Screen Volunteer Application"
+    description: "Process a new volunteer application — ingest, screen for fit, and route to approval (profile creation), waitlist, or decline based on screening verdict."
+    phases:
+      - ingest-application
+      - screen-application:
+          on_verdict:
+            approve:
+              target: create-volunteer-profile
+            waitlist:
+              target: send-waitlist-notice
+            decline:
+              target: send-decline-notice
+      - create-volunteer-profile
+      - send-waitlist-notice
+      - send-decline-notice
+    post_success:
+      merge:
+        strategy: squash
+        target_branch: main
+        create_pr: true
+        auto_merge: true
+        cleanup_worktree: true
+
+  - id: weekly-matching
+    name: "Weekly Volunteer-Opportunity Matching"
+    description: "Match approved volunteers to open opportunities. Routes to notifications on good/excellent match quality, or gap-flagging on partial/no-match."
+    phases:
+      - load-active-volunteers
+      - match-to-opportunity:
+          on_verdict:
+            excellent:
+              target: generate-match-notifications
+            good:
+              target: generate-match-notifications
+            partial:
+              target: flag-matching-gaps
+            no-match:
+              target: flag-matching-gaps
+          max_rework_attempts: 2
+      - generate-match-notifications
+      - flag-matching-gaps
+    post_success:
+      merge:
+        strategy: squash
+        target_branch: main
+        create_pr: true
+        auto_merge: true
+        cleanup_worktree: true
+
+  - id: onboard-volunteer
+    name: "Onboard Matched Volunteer"
+    description: "Generate personalized onboarding packet and schedule orientation for newly matched volunteers."
+    phases:
+      - generate-onboarding-packet
+      - schedule-orientation
+    post_success:
+      merge:
+        strategy: squash
+        target_branch: main
+        create_pr: true
+        auto_merge: true
+        cleanup_worktree: true
+
+  - id: daily-reminders
+    name: "Daily Shift Reminders"
+    description: "Check upcoming shift coverage, send reminders to confirmed volunteers, and flag understaffed shifts for outreach."
+    phases:
+      - check-upcoming-shifts
+      - send-shift-reminders
+
+  - id: monthly-recognition
+    name: "Monthly Volunteer Recognition"
+    description: "Calculate impact metrics, select top volunteers across recognition tiers, generate personalized certificates, and compile the impact report."
+    phases:
+      - calculate-impact-metrics
+      - select-and-recognize
+    post_success:
+      merge:
+        strategy: squash
+        target_branch: main
+        create_pr: true
+        auto_merge: true
+        cleanup_worktree: true
+
+  - id: monthly-report
+    name: "Monthly Program Report"
+    description: "Aggregate program-wide metrics, compile leadership report with capacity analysis and retention metrics, and create GitHub issues for critical gaps."
+    phases:
+      - aggregate-program-metrics
+      - compile-program-report
+    post_success:
+      merge:
+        strategy: squash
+        target_branch: main
+        create_pr: true
+        auto_merge: true
+        cleanup_worktree: true

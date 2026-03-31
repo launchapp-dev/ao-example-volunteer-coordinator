@@ -1,0 +1,52 @@
+organization:
+  name: "Riverside Community Foundation"
+  mission: "Connecting community members with meaningful volunteer opportunities that create lasting impact across our region."
+  location: "Riverside, CA"
+  founded: 2005
+  website: "https://example-volunteer-org.org"
+  program_manager: "Alex Rivera"
+  program_email: "volunteers@example-volunteer-org.org"
+  program_phone: "(555) 867-5309"
+
+github:
+  org: "launchapp-dev"
+  repo: "ao-example-volunteer-coordinator"
+  labels:
+    capacity_gap: "capacity-gap"
+    attrition_alert: "attrition-alert"
+    opportunity_filled: "filled"
+
+volunteer_requirements:
+  minimum_monthly_hours: 4
+  minimum_shift_length_hours: 2
+  background_check_required: true
+  orientation_required: true
+  orientation_slots:
+    - day: Tuesday
+      time: "10:00 AM"
+    - day: Thursday
+      time: "6:00 PM"
+
+recognition:
+  monthly_report_day: 1
+  tiers:
+    volunteer_of_month:
+      description: "Highest composite impact score (hours × reliability)"
+      min_hours: 8
+    rising_star:
+      description: "Most hours among volunteers active < 3 months"
+      max_months_active: 3
+      min_hours: 4
+    reliability_champion:
+      description: "Highest reliability score"
+      min_hours: 10
+      min_reliability: 0.9
+  milestones:
+    - hours: 50
+      award: "Bronze Volunteer Award"
+    - hours: 100
+      award: "Silver Volunteer Award"
+    - hours: 250
+      award: "Gold Volunteer Award"
+    - hours: 500
+      award: "Platinum Volunteer Award"

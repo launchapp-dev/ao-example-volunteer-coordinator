@@ -1,0 +1,327 @@
+phases:
+  # ─── screen-volunteer workflow phases ────────────────────────────────────────
+
+  ingest-application:
+    mode: command
+    command:
+      program: bash
+      args: ["-c", "bash scripts/ingest-application.sh {{dispatch_input}}"]
+      cwd_mode: project_root
+      timeout_secs: 30
+
+  screen-application:
+    mode: agent
+    agent: volunteer-screener
+    directive: |
+      A new volunteer application has arrived. Screen the applicant and make a placement decision.
+
+      1. Read the application from data/applications/ (most recently modified file, or use the
+         application ID from the task context if available)
+      2. Review all open opportunities in data/opportunities/ to assess fit
+      3. Score the applicant on availability, skills, and commitment
+      4. Make your decision: approve, waitlist, or decline
+
+      Return JSON with all required fields. Be fair and consistent — use the documented thresholds,
+      not subjective impressions. Include specific reasoning the volunteer could learn from if declined.
+    decision_contract:
+      required_fields:
+        - verdict
+        - reasoning
+        - availability_score
+        - recommended_roles
+
+  create-volunteer-profile:
+    mode: agent
+    agent: volunteer-screener
+    directive: |
+      The screening decision was: approve. Welcome this volunteer to the program!
+
+      Using the application data and screening results:
+      1. Create a structured volunteer profile in memory (use memory MCP to store it)
+      2. Also write the profile to data/profiles/<volunteer-id>.json
+      3. The profile should include: volunteer_id, name, email, phone, availability (days/hours),
+         skills (array), interests (array), years_experience, emergency_contact,
+         status (active), approved_date, matched_opportunities (empty array),
+         hours_logged (0), reliability_score (1.0), notes
+
+      Write a brief welcome acknowledgment to data/applications/<application-id>-decision.json
+      with status: approved, message, and next_steps.
+
+      Return JSON with: status, volunteer_id, profile_path
+    capabilities:
+      mutates_state: true
+      writes_files: true
+    output_contract:
+      required_fields:
+        - status
+        - volunteer_id
+
+  send-waitlist-notice:
+    mode: agent
+    agent: volunteer-screener
+    directive: |
+      The screening decision was: waitlist. The applicant is qualified but no current openings match.
+
+      1. Write a waitlist notification to data/applications/<application-id>-decision.json:
+         - status: waitlisted
+         - message: warm, specific explanation of why (no matching openings, not a rejection)
+         - estimated_wait: "2-8 weeks depending on openings"
+         - next_steps: what happens when a spot opens
+
+      2. Add the applicant to the waitlist in data/profiles/waitlist.json (create or append):
+         {volunteer_id, name, email, skills, availability, waitlisted_date, priority_score}
+         Priority score = availability_score × 2 + skills_match_count
+
+      Return JSON with: status, volunteer_id, waitlist_position
+    capabilities:
+      mutates_state: true
+      writes_files: true
+
+  send-decline-notice:
+    mode: agent
+    agent: volunteer-screener
+    directive: |
+      The screening decision was: decline. Handle this respectfully.
+
+      Write a decline notification to data/applications/<application-id>-decision.json:
+      - status: declined
+      - message: brief, respectful explanation (focus on fit/availability, never personal)
+      - suggest_alternatives: if the applicant might fit in 3-6 months, mention reapplying
+
+      Do not store a profile for declined applicants.
+      Return JSON with: status, notification_written (bool)
+    capabilities:
+      mutates_state: true
+      writes_files: true
+
+  # ─── weekly-matching workflow phases ─────────────────────────────────────────
+
+  load-active-volunteers:
+    mode: command
+    command:
+      program: bash
+      args: ["-c", "python3 scripts/load-active-volunteers.py"]
+      cwd_mode: project_root
+      timeout_secs: 30
+
+  match-to-opportunity:
+    mode: agent
+    agent: opportunity-matcher
+    directive: |
+      Run the weekly volunteer-to-opportunity matching cycle.
+
+      1. Load all approved, unmatched volunteers from data/profiles/ (status: active, matched_opportunities: empty)
+         Also check data/profiles/waitlist.json for any waitlisted volunteers whose skills now fit open roles
+      2. Load all open opportunities from data/opportunities/ (status: open, spots available)
+      3. For each unmatched volunteer: score against all open opportunities and select the best match
+      4. Write match results to data/schedules/matches-$(date +%Y-%m-%d).json
+
+      Use sequential-thinking when multiple volunteers compete for limited spots in the same opportunity.
+      Prioritize: best match score → longest waitlist time → most restrictive availability.
+
+      Return JSON with your verdict (excellent/good/partial/no-match) based on the overall matching
+      quality for the week. Also include: volunteers_matched (int), opportunities_filled (int),
+      waitlist_converted (int), unmatched_volunteers (array of IDs), unfilled_opportunities (array of IDs)
+    decision_contract:
+      required_fields:
+        - verdict
+        - volunteers_matched
+        - unmatched_volunteers
+        - unfilled_opportunities
+
+  generate-match-notifications:
+    mode: agent
+    agent: opportunity-matcher
+    directive: |
+      Matches have been made (verdict was excellent or good). Generate notification packages.
+
+      Read data/schedules/matches-$(date +%Y-%m-%d).json for today's matches.
+      For each match:
+      1. Update the volunteer's profile in memory and data/profiles/<id>.json:
+         - Add the opportunity to matched_opportunities
+         - Set status to "matched"
+      2. Update data/opportunities/<id>.json to decrement available spots
+      3. Write a match notification to data/schedules/notifications/<volunteer-id>-match.json
+         (personalized: volunteer name, role, supervisor, first shift date, onboarding packet instructions)
+
+      Return JSON with: status, notifications_written (int), profiles_updated (int)
+    capabilities:
+      mutates_state: true
+      writes_files: true
+    output_contract:
+      required_fields:
+        - status
+        - notifications_written
+
+  flag-matching-gaps:
+    mode: agent
+    agent: opportunity-matcher
+    directive: |
+      The matching run returned partial or no-match verdict — there are unresolved gaps.
+
+      Read data/schedules/matches-$(date +%Y-%m-%d).json for the details.
+      For each unmatched volunteer and unfilled opportunity:
+      1. Diagnose the gap: why couldn't we match? (skills mismatch, availability conflict, no open spots)
+      2. Create a gap record in data/schedules/gaps-$(date +%Y-%m-%d).json
+      3. Create a GitHub issue for any persistent gap (opportunity unfilled 2+ consecutive weeks):
+         Title: "Volunteer gap: <opportunity title> needs coverage"
+         Body: gap details, required skills, availability windows needed
+
+      Return JSON with: gaps_diagnosed (int), github_issues_created (int), gaps (array of objects)
+    capabilities:
+      mutates_state: true
+      writes_files: true
+
+  # ─── onboard-volunteer workflow phases ───────────────────────────────────────
+
+  generate-onboarding-packet:
+    mode: agent
+    agent: onboarding-writer
+    directive: |
+      Generate a personalized onboarding packet for a newly matched volunteer.
+
+      Read config/org-profile.yaml for organization context.
+      Identify the newly matched volunteer — read from data/schedules/matches-$(date +%Y-%m-%d).json
+      or use the volunteer ID provided in the task context.
+
+      For each newly matched volunteer:
+      1. Read their profile from memory (or data/profiles/<volunteer-id>.json)
+      2. Read the opportunity they were matched to (data/opportunities/<opportunity-id>.json)
+      3. Generate their complete onboarding packet and write it to onboarding/<volunteer-id>-onboarding.md
+
+      Return JSON with: status, packets_generated (int), packet_paths (array)
+    capabilities:
+      mutates_state: true
+      writes_files: true
+    output_contract:
+      required_fields:
+        - status
+        - packets_generated
+
+  schedule-orientation:
+    mode: agent
+    agent: shift-scheduler
+    directive: |
+      Schedule orientation sessions for newly onboarded volunteers.
+
+      1. Read data/schedules/upcoming-shifts.json for next available orientation slot
+         (orientations are held every Tuesday at 10am and Thursday at 6pm)
+      2. For each newly onboarded volunteer: assign them to the next available orientation
+         (choose based on their stated availability from their profile)
+      3. Update data/schedules/upcoming-shifts.json to mark the volunteer as registered
+      4. Write orientation confirmation to data/schedules/notifications/<volunteer-id>-orientation.json
+
+      Return JSON with: status, orientations_scheduled (int), next_orientation_date (string)
+    capabilities:
+      mutates_state: true
+      writes_files: true
+
+  # ─── daily-reminders workflow phases ─────────────────────────────────────────
+
+  check-upcoming-shifts:
+    mode: agent
+    agent: shift-scheduler
+    directive: |
+      Check shift coverage status for the next 48 hours.
+
+      1. Read data/schedules/upcoming-shifts.json
+      2. Filter for shifts starting in the next 24-48 hours
+      3. For each shift: calculate coverage status (fully-staffed/at-risk/understaffed)
+      4. Load volunteer profiles from memory for each confirmed volunteer
+
+      Return JSON with: shifts_checked (int), fully_staffed (int), at_risk (int), understaffed (int),
+      gaps_requiring_outreach (array of shift IDs and details)
+    output_contract:
+      required_fields:
+        - shifts_checked
+        - gaps_requiring_outreach
+
+  send-shift-reminders:
+    mode: agent
+    agent: shift-scheduler
+    directive: |
+      Generate and log shift reminders for tomorrow's volunteers.
+
+      Using the shift coverage data from the previous phase:
+      1. For each volunteer with a shift in the next 24 hours:
+         - Write a reminder entry to data/schedules/reminders-$(date +%Y-%m-%d).json
+         - Include: volunteer name, shift title, date, time, location, supervisor name and contact
+         - Personalize with the volunteer's name
+      2. For any understaffed shifts: flag with escalation notes for program manager
+      3. Write a coverage summary to data/schedules/coverage-$(date +%Y-%m-%d).json
+
+      Return JSON with: reminders_sent (int), understaffed_shifts (array), coverage_summary_path (string)
+    capabilities:
+      mutates_state: true
+      writes_files: true
+
+  # ─── monthly-recognition workflow phases ─────────────────────────────────────
+
+  calculate-impact-metrics:
+    mode: command
+    command:
+      program: bash
+      args: ["-c", "python3 scripts/calculate-impact.py"]
+      cwd_mode: project_root
+      timeout_secs: 60
+
+  select-and-recognize:
+    mode: agent
+    agent: recognition-generator
+    directive: |
+      Run the monthly recognition process.
+
+      1. Read data/history/ for last month's volunteer hours and shift attendance logs
+      2. Calculate composite impact scores for all volunteers active this month
+      3. Select recognition recipients per tier (Volunteer of Month, Rising Star, Reliability Champion, Milestones)
+      4. Generate a personalized certificate for each recipient
+      5. Compile the monthly impact report
+
+      Be specific in certificates — mention actual shifts worked, hours contributed, any standout moments
+      mentioned in shift notes. A certificate that says "Thank you for your 47 hours this month serving
+      our food pantry every Tuesday and Thursday" is 10× better than "Thank you for volunteering."
+
+      Return JSON with all required fields.
+    capabilities:
+      mutates_state: true
+      writes_files: true
+    output_contract:
+      required_fields:
+        - volunteers_recognized
+        - volunteer_of_month
+        - total_hours_this_month
+        - report_path
+
+  # ─── monthly-report workflow phases ──────────────────────────────────────────
+
+  aggregate-program-metrics:
+    mode: command
+    command:
+      program: bash
+      args: ["-c", "python3 scripts/aggregate-metrics.py"]
+      cwd_mode: project_root
+      timeout_secs: 60
+
+  compile-program-report:
+    mode: agent
+    agent: program-reporter
+    directive: |
+      Compile the comprehensive monthly volunteer program report for leadership.
+
+      1. Read data/history/ for aggregated monthly metrics (just calculated by aggregate-metrics.py)
+      2. Read reports/monthly/impact-$(date -d 'last month' +%Y-%m).md for recognition highlights
+      3. Pull all volunteer profiles from memory to assess retention and lifecycle stats
+      4. Analyze capacity across all opportunities (coverage rates, recurring gaps)
+      5. Write the full program report to reports/monthly/program-$(date +%Y-%m).md
+      6. Create GitHub issues for any critical capacity alerts (use github MCP)
+
+      Return JSON with all required fields.
+    capabilities:
+      mutates_state: true
+      writes_files: true
+    output_contract:
+      required_fields:
+        - status
+        - report_path
+        - active_volunteers
+        - coverage_rate_pct
